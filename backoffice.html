@@ -180,11 +180,11 @@ async function iniciar(){try{S.eu=await rpc('ap_bo_eu',{p_token:S.token})}catch(
 async function carregar(sil){try{S.P=await rpc('ap_bo_painel',{p_token:S.token,p_desde:dia(ymd(new Date())).toISOString()});S.cfg=S.P.config||{};S.dif=new Date(S.P.agora)-new Date();
   avisarNovas();const a=$('#atz');if(a)a.textContent='Atualizado '+hm(new Date().toISOString())+' · a cada 20 s'}catch(e){if(!sil)erro(e)}}
 const agora=()=>new Date(Date.now()+(S.dif||0));
-const ABAS=[['vivo','🗺 Ao vivo'],['msg','💬 Mensagens'],['despacho','📋 Despacho'],['linha','📊 Linha do tempo'],['ind','📈 Indicadores'],['apont','🧾 Apontamentos'],['cad','⚙ Cadastros']];
+const ABAS=[['vivo','🗺 Ao vivo'],['msg','💬 Mensagens'],['despacho','📋 Despacho'],['linha','📊 Linha do tempo'],['percurso','🧭 Percurso'],['ind','📈 Indicadores'],['apont','🧾 Apontamentos'],['cad','⚙ Cadastros']];
 function render(auto){const nm=msgPend();$('#nav').innerHTML=ABAS.map(a=>`<button data-a="${a[0]}" class="${S.aba===a[0]?'on':''}">${a[1]}${a[0]==='msg'&&nm?`<span class="nb">${nm}</span>`:''}</button>`).join('');document.title=(nm?`(${nm}) `:'')+'Despacho COI';
  document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>{S.aba=b.dataset.a;render()});
  if(arguments[1]==='nav')return;
- ({vivo:vVivo,msg:vMsg,despacho:vDespacho,linha:vLinha,ind:vInd,apont:vApont,cad:vCad})[S.aba](auto)}
+ ({vivo:vVivo,msg:vMsg,despacho:vDespacho,linha:vLinha,percurso:vPercurso,ind:vInd,apont:vApont,cad:vCad})[S.aba](auto)}
 
 // ===== situação de cada equipe =====
 function situacao(e){const T=S.P.tarefas||[];const now=agora();const at=e.atual;const al=[];let cat=null,txt='Fora de turno';
@@ -224,25 +224,131 @@ function pintarMapa(E,sit,ajustar){if(!S.mapa||!window.L)return;const pts=[];
 
 // ===== detalhe da equipe =====
 async function detalheEquipe(id){const e=S.P.equipes.find(x=>x.id===id);const A=(S.P.atividades||[]).filter(a=>a.equipe_id===id);const now=agora();
- const ov=modal(`${esc(e.id)} · ${esc(e.nome)}`,`<div class="acts" style="margin-bottom:12px">${S.eu.editor?`<button class="btn" id="dq_l">+ Lançar atividade</button><button class="btn mg" id="dq_d">📋 Despachar tarefa</button>${e.turno?'<button class="btn red" id="dq_f">⏹ Encerrar turno pela equipe</button>':''}`:''}<button class="btn sec" id="dq_t">🗺 Ver percurso do turno no mapa</button></div>
+ const ov=modal(`${esc(e.id)} · ${esc(e.nome)}`,`<div class="acts" style="margin-bottom:12px">${S.eu.editor?`<button class="btn" id="dq_l">+ Lançar atividade</button><button class="btn mg" id="dq_d">📋 Despachar tarefa</button>${e.turno?'<button class="btn red" id="dq_f">⏹ Encerrar turno pela equipe</button>':''}`:''}<button class="btn sec" id="dq_t">🗺 Ver percurso do turno no mapa</button><button class="btn sec" id="dq_p">📄 PDF do percurso</button></div>
   <div class="box"><h3>Turno</h3>${e.turno?`Início ${dmh(e.turno.inicio)} · Integrantes: ${esc(e.turno.integrantes||'–')} · Placa ${esc(e.turno.placa||'–')} · Km inicial ${esc(e.turno.km_ini??'–')}`:'Fora de turno'}</div>
   <div class="box"><h3>Atividades de hoje</h3>${A.length?`<table class="t"><tr><th>Atividade</th><th>Início</th><th>Fim</th><th class="num">Duração</th><th>OS / detalhes</th><th>Origem</th></tr>${A.map(a=>`<tr><td>${tipo(a.tipo).ico||''} ${esc(a.tipo)}</td><td>${hm(a.inicio)}</td><td>${a.fim?hm(a.fim):'<b>agora</b>'}</td><td class="num">${dur(new Date(a.fim||now)-new Date(a.inicio))}</td><td>${esc([a.os?'OS '+a.os:'',...Object.entries(a.dados||{}).map(x=>x[1])].filter(Boolean).join(' · '))}</td><td>${a.origem==='backoffice'?'<span class="tag" style="background:#FFF3B8">COI</span>':'celular'}</td></tr>`).join('')}</table>`:'<div class="vz">Nada apontado hoje</div>'}</div>`);
  if(S.eu.editor){ov.querySelector('#dq_l').onclick=()=>{ov.remove();editarAtiv(null,id)};if(ov.querySelector('#dq_f'))ov.querySelector('#dq_f').onclick=()=>{ov.remove();encerrarTurno(e)};ov.querySelector('#dq_d').onclick=()=>{ov.remove();S.aba='despacho';S.preEq=id;render()}}
  ov.querySelector('#dq_t').onclick=async()=>{ov.remove();if(S.aba!=='vivo'){S.aba='vivo';render()}try{
-   // percurso limitado ao turno: turno aberto (e.turno) ou o último turno de hoje da equipe
-   const T=e.turno||[...(S.P.turnos||[])].filter(t=>t.equipe_id===id).sort((x,y)=>new Date(y.inicio)-new Date(x.inicio))[0];
+   const T=turnoDaEquipe(e,id);
    if(!T)return toast('Nenhum turno de '+id+' hoje');
-   const ini=new Date(T.inicio).toISOString(),ate=T.fim?new Date(T.fim).toISOString():new Date(Date.now()+864e5).toISOString();
-   const p=await rpc('ap_bo_trilha',{p_token:S.token,p_equipe:id,p_de:ini,p_ate:ate});
-   if(!S.mapa||!window.L)return toast('Mapa indisponível');if(S.trilha)S.mapa.removeLayer(S.trilha);if(!p.length)return toast('Sem posições no turno de '+id);
-   const a=p[0],b=p[p.length-1],aberto=!T.fim,hora=s=>hm(new Date(s*1000).toISOString());
-   S.trilha=L.layerGroup([
-     L.polyline(p.map(x=>[x[1],x[2]]),{color:'#E12379',weight:4,opacity:.8}),
-     L.circleMarker([a[1],a[2]],{radius:8,color:'#12A36B',fillColor:'#12A36B',fillOpacity:1}).bindTooltip('Início do percurso · '+hora(a[0])),
-     L.circleMarker([b[1],b[2]],{radius:8,color:'#0B1A5C',fillColor:'#0B1A5C',fillOpacity:1}).bindTooltip((aberto?'Última posição · ':'Fim do turno · ')+hora(b[0]))
-   ]).addTo(S.mapa);
-   S.mapa.fitBounds(p.map(x=>[x[1],x[2]]),{padding:[40,40]});
-   toast(`Percurso de ${id}: ${hm(ini)} até ${aberto?'agora (turno aberto)':hm(T.fim)} · ${p.length} posições`,4000)}catch(er){erro(er)}}}
+   if(!S.mapa||!window.L)return toast('Mapa indisponível');
+   if(S.trilha)S.mapa.removeLayer(S.trilha);
+   S.trilha=await percursoTurno(S.mapa,T,id)}catch(er){erro(er)}};
+ ov.querySelector('#dq_p').onclick=()=>{const T=turnoDaEquipe(e,id);if(!T)return toast('Nenhum turno de '+id+' hoje');relatorioPercurso(T,id)};
+}
+
+// ===== PERCURSO DO TURNO (mapa, histórico por data e PDF) =====
+const turnoDaEquipe=(e,id)=>e.turno||[...(S.P.turnos||[])].filter(t=>t.equipe_id===id).sort((x,y)=>new Date(y.inicio)-new Date(x.inicio))[0];
+const haversineKm=p=>p.reduce((s,q,i)=>{if(!i)return s;const A=p[i-1],R=6371,r=x=>x*Math.PI/180;const dLa=r(q[1]-A[1]),dLo=r(q[2]-A[2]);const h=Math.sin(dLa/2)**2+Math.cos(r(A[1]))*Math.cos(r(q[1]))*Math.sin(dLo/2)**2;return s+2*R*Math.asin(Math.sqrt(h))},0);
+const horaPos=s=>hm(new Date(s*1000).toISOString());
+async function buscarPercurso(T,id){
+  const ini=new Date(T.inicio).toISOString(),ate=T.fim?new Date(T.fim).toISOString():new Date(Date.now()+864e5).toISOString();
+  return rpc('ap_bo_trilha',{p_token:S.token,p_equipe:id,p_de:ini,p_ate:ate});
+}
+function desenharPercurso(map,T,p){
+  const a=p[0],b=p[p.length-1],aberto=!T.fim;
+  const camada=L.layerGroup([
+    L.polyline(p.map(x=>[x[1],x[2]]),{color:'#E12379',weight:4,opacity:.8}),
+    L.circleMarker([a[1],a[2]],{radius:8,color:'#12A36B',fillColor:'#12A36B',fillOpacity:1}).bindTooltip('Início do percurso · '+horaPos(a[0])),
+    L.circleMarker([b[1],b[2]],{radius:8,color:'#0B1A5C',fillColor:'#0B1A5C',fillOpacity:1}).bindTooltip((aberto?'Última posição · ':'Fim do turno · ')+horaPos(b[0]))
+  ]).addTo(map);
+  map.fitBounds(p.map(x=>[x[1],x[2]]),{padding:[40,40]});
+  return camada;
+}
+async function percursoTurno(map,T,id){
+  const p=await buscarPercurso(T,id);
+  if(!p.length){toast('Sem posições no turno de '+id);return null}
+  const camada=desenharPercurso(map,T,p);
+  toast(`Percurso de ${id}: ${hm(T.inicio)} até ${T.fim?hm(T.fim):'agora (turno aberto)'} · ${p.length} posições`,4000);
+  return camada;
+}
+
+async function relatorioPercurso(T,id){
+  const w=window.open('','_blank');
+  if(!w)return toast('O navegador bloqueou a janela do relatório. Permita pop-ups deste site.',4500);
+  w.document.write('<p style="font-family:Arial;padding:20px">Gerando relatório…</p>');
+  try{
+    const p=await buscarPercurso(T,id);
+    const diaStr=ymd(new Date(T.inicio));
+    const D=await periodo(diaStr,diaStr,id);
+    const ini=new Date(T.inicio),fimT=T.fim?new Date(T.fim):new Date(Date.now()+864e5);
+    const atv=(D.atividades||[]).filter(a=>a.equipe_id===id&&new Date(a.inicio)>=ini&&new Date(a.inicio)<fimT);
+    const eq=(S.P.equipes||[]).find(x=>x.id===id)||{};
+    const km=p.length>1?haversineKm(p):0;
+    const linhas=atv.map(a=>`<tr><td>${esc(a.tipo)}</td><td>${hm(a.inicio)}</td><td>${a.fim?hm(a.fim):'em andamento'}</td><td>${esc(a.os||'–')}</td><td>${esc((a.dados||{}).resultado||'')}</td></tr>`).join('')||'<tr><td colspan="5">Nenhum apontamento no turno</td></tr>';
+    const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Percurso ${esc(id)} · ${esc(diaStr)}</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+@page{size:A4;margin:12mm}
+body{font-family:Arial,Helvetica,sans-serif;color:#0B1A5C;font-size:12px;margin:18px}
+h1{font-size:18px;color:#0027BD;margin:0 0 2px}
+.sub{color:#5A6699;margin-bottom:12px}
+.kp{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0}
+.kp div{border-left:4px solid #0027BD;padding:6px 8px;background:#F4F6FB}
+.kp small{color:#5A6699;display:block}.kp b{font-size:15px}
+table{width:100%;border-collapse:collapse;margin:8px 0 12px}
+th,td{border-bottom:1px solid #D3D8EA;padding:5px 6px;text-align:left;font-size:11px}
+th{color:#0027BD;border-top:2px solid #0027BD;border-bottom:2px solid #0027BD}
+#m{height:340px;border:1px solid #D3D8EA;border-radius:6px;margin:8px 0}
+.rod{margin-top:10px;color:#5A6699;font-size:10px}
+@media print{.noprint{display:none}}
+</style></head><body>
+<div class="noprint"><button onclick="window.print()">Imprimir / salvar PDF</button></div>
+<h1>Percurso da equipe ${esc(id)}</h1>
+<div class="sub">${esc(eq.nome||'')} · ${esc(diaStr)}</div>
+<div class="kp">
+<div><small>Início do turno</small><b>${hm(T.inicio)}</b></div>
+<div><small>Fim do turno</small><b>${T.fim?hm(T.fim):'em andamento'}</b></div>
+<div><small>Distância (linha entre posições)</small><b>${km.toFixed(1).replace('.',',')} km</b></div>
+<div><small>Posições GPS</small><b>${p.length}</b></div>
+</div>
+<table><tr><th>Integrantes</th><th>Placa</th><th>Km inicial</th><th>Km final</th></tr>
+<tr><td>${esc(T.integrantes||'–')}</td><td>${esc(T.placa||'–')}</td><td>${esc(T.km_ini??'–')}</td><td>${esc(T.km_fim??'–')}</td></tr></table>
+<div id="m"></div>
+<table><tr><th>Atividade</th><th>Início</th><th>Fim</th><th>OS</th><th>Resultado</th></tr>${linhas}</table>
+<div class="rod">Gerado em ${esc(new Date().toLocaleString('pt-BR',{timeZone:TZ}))} por ${esc(S.eu.nome)}. Percurso ligando as posições GPS do celular (não é o caminho exato pelas ruas).</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>
+<script>
+const P=${JSON.stringify(p.map(x=>[x[0],x[1],x[2]]))};
+const hora=s=>new Date(s*1000).toLocaleTimeString('pt-BR',{timeZone:'${TZ}',hour:'2-digit',minute:'2-digit'});
+if(P.length){
+  const map=L.map('m');
+  const tiles=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
+  const ll=P.map(x=>[x[1],x[2]]);
+  L.polyline(ll,{color:'#E12379',weight:4}).addTo(map);
+  L.circleMarker(ll[0],{radius:8,color:'#12A36B',fillColor:'#12A36B',fillOpacity:1}).bindTooltip('Início · '+hora(P[0][0])).addTo(map);
+  L.circleMarker(ll[ll.length-1],{radius:8,color:'#0B1A5C',fillColor:'#0B1A5C',fillOpacity:1}).bindTooltip('Fim · '+hora(P[P.length-1][0])).addTo(map);
+  map.fitBounds(ll,{padding:[30,30]});
+  let feito=false;const imprimir=()=>{if(!feito){feito=true;window.print()}};
+  tiles.on('load',()=>setTimeout(imprimir,400));setTimeout(imprimir,8000);
+}else{document.getElementById('m').innerHTML='<p>Sem posições GPS no turno.</p>'}
+<\/script></body></html>`;
+    w.document.open();w.document.write(html);w.document.close();
+  }catch(er){try{w.close()}catch(_){}erro(er)}
+}
+
+// aba Percurso: escolhe dia e equipe, mostra os turnos e abre o mapa ou o PDF de cada um
+async function vPercurso(){S.pDia=S.pDia||ymd(new Date());
+ $('#main').innerHTML=`<div class="h1">Percurso das <span class="serif">equipes</span></div><div class="filtros"><label>Dia</label><input type="date" id="pd" value="${S.pDia}"><label>Equipe</label><select id="pe"><option value="">Carregando…</option></select></div>
+  <div class="live"><div id="pmapa" style="height:calc(100vh - 260px);min-height:420px;border-radius:12px;background:#dfe5f3"></div><div class="lista" id="plst"><div class="vz">Carregando turnos…</div></div></div>`;
+ $('#pd').onchange=e=>{S.pDia=e.target.value;S.pEq='';vPercurso()};
+ let T;try{const D=await periodo(S.pDia,S.pDia);T=(D.turnos||[]).slice().sort((a,b)=>new Date(a.inicio)-new Date(b.inicio))}catch(e){return erro(e)}
+ const eqs=[...new Set(T.map(t=>t.equipe_id))].sort();
+ if(S.pEq&&!eqs.includes(S.pEq))S.pEq='';
+ $('#pe').innerHTML='<option value="">Todas as equipes</option>'+eqs.map(x=>`<option ${S.pEq===x?'selected':''}>${esc(x)}</option>`).join('');
+ $('#pe').onchange=e=>{S.pEq=e.target.value;lista()};
+ S.pTrilha=null;
+ if(window.L){S.pmapa=L.map('pmapa').setView([-3.76,-38.55],11);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(S.pmapa)}
+ else $('#pmapa').innerHTML='<div class="vz" style="padding-top:120px">Mapa indisponível.</div>';
+ function lista(){const L2=T.filter(t=>!S.pEq||t.equipe_id===S.pEq);
+  $('#plst').innerHTML=L2.length?L2.map(t=>`<div class="eqc" style="border-left-color:${cor('Produtiva')}"><div class="l1"><span class="cod">${esc(t.equipe_id)}</span><span class="nm">${esc(t.integrantes||'')}</span></div>
+   <div class="at">${hm(t.inicio)} – ${t.fim?hm(t.fim):'<b>em andamento</b>'}</div><div class="dt">Placa ${esc(t.placa||'–')}${t.km_ini!=null?' · km '+esc(t.km_ini)+(t.km_fim!=null?' → '+esc(t.km_fim):''):''}</div>
+   <div class="acts" style="margin-top:8px"><button class="btn sm" data-m="${T.indexOf(t)}">🗺 Mostrar no mapa</button><button class="btn sm sec" data-p="${T.indexOf(t)}">📄 PDF do percurso</button></div></div>`).join(''):'<div class="vz">Nenhum turno nesse dia.</div>';
+  $('#plst').querySelectorAll('[data-m]').forEach(b=>b.onclick=async()=>{const t=T[+b.dataset.m];if(!S.pmapa)return toast('Mapa indisponível');try{if(S.pTrilha)S.pmapa.removeLayer(S.pTrilha);S.pTrilha=await percursoTurno(S.pmapa,t,t.equipe_id)}catch(er){erro(er)}});
+  $('#plst').querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{const t=T[+b.dataset.p];relatorioPercurso(t,t.equipe_id)});
+ }
+ lista();
+}
 function modal(tit,html,w){const ov=document.createElement('div');ov.className='ov';ov.innerHTML=`<div class="md" style="${w?'width:min('+w+'px,100%)':''}"><div class="mh"><h3>${tit}</h3><button class="x">✕</button></div><div class="mb">${html}</div></div>`;document.body.appendChild(ov);
  ov.querySelector('.x').onclick=()=>ov.remove();ov.onclick=e=>{if(e.target===ov)ov.remove()};return ov}
 
