@@ -17,6 +17,18 @@ button,input,select,textarea{font-family:inherit;font-size:14px;color:var(--tx)}
 .nav{display:flex;gap:2px;padding:0 20px;background:#fff;border-bottom:1px solid var(--ln);position:sticky;top:57px;z-index:999;overflow-x:auto}
 .nav button{border:0;background:none;padding:11px 15px;font-weight:700;color:var(--q);cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap}
 .nav button.on{color:var(--az);border-bottom-color:var(--mg)}
+.nav .nb{display:inline-block;background:var(--mg);color:#fff;border-radius:10px;font-size:11px;padding:1px 7px;margin-left:5px;vertical-align:1px}
+.msgg{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:16px}@media(max-width:1000px){.msgg{grid-template-columns:1fr}}
+.pd{border:1px solid var(--ln);border-left:5px solid var(--mg);border-radius:10px;padding:10px 12px;margin-bottom:10px;background:#fff}
+.pd .h{display:flex;gap:8px;align-items:center;font-weight:800;color:var(--az)}.pd .h .sp{flex:1}.pd .x{margin:6px 0;color:#0B1A5C}.pd .acts{margin-top:8px}
+.cv{display:grid;grid-template-columns:220px minmax(0,1fr);gap:0;border:1px solid var(--ln);border-radius:10px;overflow:hidden;min-height:460px;background:#fff}
+.cv .eqs{border-right:1px solid var(--ln);overflow:auto;max-height:620px}.cv .eqs div{padding:9px 12px;border-bottom:1px solid var(--ln);cursor:pointer;font-size:13px}
+.cv .eqs div.on{background:var(--c0);border-left:4px solid var(--az)}.cv .eqs small{color:var(--q);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cv .th{display:flex;flex-direction:column;min-width:0}.cv .ms{flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:8px;max-height:540px}
+.bl{max-width:78%;padding:8px 12px;border-radius:12px;font-size:14px;line-height:1.35}.bl.eq{align-self:flex-start;background:var(--c0)}.bl.coi{align-self:flex-end;background:var(--az);color:#fff}
+.bl.sis{align-self:center;background:#FFF3B8;font-size:12px}.bl small{display:block;font-size:11px;opacity:.75;margin-top:2px}
+.cv .in{display:flex;gap:8px;padding:10px;border-top:1px solid var(--ln)}.cv .in input{flex:1;padding:9px;border:1px solid var(--ln);border-radius:8px}
+
 main{padding:16px 20px 50px;max-width:1700px;margin:0 auto}
 .h1{font-size:21px;font-weight:700;color:var(--az);margin:2px 0 12px}.h1 .serif,.serif{font-family:Georgia,serif;font-style:italic;font-weight:400}
 .sub{color:var(--q);font-size:13px;margin:-6px 0 14px}
@@ -164,14 +176,15 @@ function sair(){sessionStorage.removeItem('ap_bo_tok');S.token=null;clearInterva
 async function iniciar(){try{S.eu=await rpc('ap_bo_eu',{p_token:S.token})}catch(e){return telaLogin(/Sessão/.test(e.message)?'':e.message)}
  $('#app').innerHTML=`<div class="top"><img src="${LOGO_AC}"><div class="tit">Despacho e <span>Apontamentos</span> · COI</div><div class="sp"></div><div id="atz" style="font-size:12px;color:var(--q)"></div>
   <div class="user"><b>${esc(S.eu.nome)}</b><br>${S.eu.editor?'<span class="tag" style="background:var(--tq)">PROGRAMADOR · EDITA</span>':'<span class="tag" style="background:var(--c1)">LEITURA</span>'} · <a href="#" id="bs">Sair</a></div></div><div class="nav" id="nav"></div><main id="main"></main>`;
- $('#bs').onclick=e=>{e.preventDefault();sair()};await carregar();render();clearInterval(S.poll);S.poll=setInterval(async()=>{if(document.querySelector('.ov'))return;await carregar(true);if(['vivo','despacho'].includes(S.aba))render(true)},20000)}
+ $('#bs').onclick=e=>{e.preventDefault();sair()};await carregar();render();clearInterval(S.poll);S.poll=setInterval(async()=>{if(document.querySelector('.ov'))return;await carregar(true);if(['vivo','despacho','msg'].includes(S.aba))render(true);else render(true,'nav')},20000)}
 async function carregar(sil){try{S.P=await rpc('ap_bo_painel',{p_token:S.token,p_desde:dia(ymd(new Date())).toISOString()});S.cfg=S.P.config||{};S.dif=new Date(S.P.agora)-new Date();
-  const a=$('#atz');if(a)a.textContent='Atualizado '+hm(new Date().toISOString())+' · a cada 20 s'}catch(e){if(!sil)erro(e)}}
+  avisarNovas();const a=$('#atz');if(a)a.textContent='Atualizado '+hm(new Date().toISOString())+' · a cada 20 s'}catch(e){if(!sil)erro(e)}}
 const agora=()=>new Date(Date.now()+(S.dif||0));
-const ABAS=[['vivo','🗺 Ao vivo'],['despacho','📋 Despacho'],['linha','📊 Linha do tempo'],['ind','📈 Indicadores'],['apont','🧾 Apontamentos'],['cad','⚙ Cadastros']];
-function render(auto){$('#nav').innerHTML=ABAS.map(a=>`<button data-a="${a[0]}" class="${S.aba===a[0]?'on':''}">${a[1]}</button>`).join('');
+const ABAS=[['vivo','🗺 Ao vivo'],['msg','💬 Mensagens'],['despacho','📋 Despacho'],['linha','📊 Linha do tempo'],['ind','📈 Indicadores'],['apont','🧾 Apontamentos'],['cad','⚙ Cadastros']];
+function render(auto){const nm=msgPend();$('#nav').innerHTML=ABAS.map(a=>`<button data-a="${a[0]}" class="${S.aba===a[0]?'on':''}">${a[1]}${a[0]==='msg'&&nm?`<span class="nb">${nm}</span>`:''}</button>`).join('');document.title=(nm?`(${nm}) `:'')+'Despacho COI';
  document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>{S.aba=b.dataset.a;render()});
- ({vivo:vVivo,despacho:vDespacho,linha:vLinha,ind:vInd,apont:vApont,cad:vCad})[S.aba](auto)}
+ if(arguments[1]==='nav')return;
+ ({vivo:vVivo,msg:vMsg,despacho:vDespacho,linha:vLinha,ind:vInd,apont:vApont,cad:vCad})[S.aba](auto)}
 
 // ===== situação de cada equipe =====
 function situacao(e){const T=S.P.tarefas||[];const now=agora();const at=e.atual;const al=[];let cat=null,txt='Fora de turno';
@@ -179,6 +192,7 @@ function situacao(e){const T=S.P.tarefas||[];const now=agora();const at=e.atual;
    if(t.id==='aguard_prog'||at.tipo==='Aguardando programação')al.push(['📵 equipe livre: despachar','#FDE7F0'])}
   else{cat='Sem apontamento';txt='Sem apontamento';al.push(['⏸ sem atividade','#FFE1E2'])}
   const sinc=e.ult_sync_em?now-new Date(e.ult_sync_em):1e12;if(sinc>10*60000)al.push(['📶 sem sinal há '+dur(sinc),'#FFE1E2'])}
+ (S.P.mensagens||[]).filter(m=>m.equipe_id===e.id&&m.status==='aberta').forEach(m=>al.push(m.tipo==='gps_off'?['📍 GPS desligado desde '+hm(m.em),'#FFE1E2']:['💬 '+(MSG_T[m.tipo]||MSG_T.texto).nome.toLowerCase(),'#FDE7F0']));
  const pend=T.filter(t=>t.equipe_id===e.id&&t.status==='enviada');pend.forEach(t=>{if(now-new Date(t.criada_em)>10*60000)al.push(['📋 tarefa não aceita há '+dur(now-new Date(t.criada_em)),'#FFF3B8'])});
  return {cat,txt,al,tar:T.find(t=>t.equipe_id===e.id&&['aceita','em_deslocamento','em_execucao'].includes(t.status)),pend}}
 
@@ -265,8 +279,9 @@ function vDespacho(auto){const E=(S.P.equipes||[]).filter(e=>e.ativo);const T=S.
   <button class="btn mg" style="width:100%;margin-top:10px;padding:11px" id="dp_b">📤 Enviar para a equipe</button>`:'<div class="vz">Somente programadores habilitados despacham.</div>'}</div>
  <div class="box"><h3>Tarefas de hoje e em aberto</h3><div id="dtab" style="overflow:auto">${T.length?tab:'<div class="vz">Nenhuma tarefa hoje.</div>'}</div></div></div>`;
  S.preEq=null;ligarDesp();
+ if(S.preDesp&&$('#dp_sv')){const q=S.preDesp;[['#dp_sv','servico'],['#dp_os','os'],['#dp_ob','obs'],['#dp_la','lat'],['#dp_lo','lng'],['#dp_mu','municipio'],['#dp_ba','bairro']].forEach(([i,k])=>{if(q[k]!=null&&q[k]!=='')$(i).value=q[k]});toast('Pedido de '+q.de+' carregado. Escolha a equipe e envie.',4000)}
  if($('#dp_b'))$('#dp_b').onclick=async()=>{const n=v=>v?+String(v).replace(',','.'):'';const d={equipe_id:$('#dp_eq').value,servico:$('#dp_sv').value.trim(),os:$('#dp_os').value.trim(),prioridade:$('#dp_pr').value,municipio:$('#dp_mu').value.trim(),bairro:$('#dp_ba').value.trim(),endereco:$('#dp_en').value.trim(),referencia:$('#dp_rf').value.trim(),obs:$('#dp_ob').value.trim(),lat:n($('#dp_la').value),lng:n($('#dp_lo').value)};
-  if(!d.equipe_id||!d.servico)return toast('Informe equipe e serviço');try{await rpc('ap_bo_tarefa_salvar',{p_token:S.token,p_id:null,p_dados:d});toast('Tarefa enviada para '+d.equipe_id);await carregar(true);vDespacho()}catch(e){erro(e)}}}
+  if(!d.equipe_id||!d.servico)return toast('Informe equipe e serviço');try{await rpc('ap_bo_tarefa_salvar',{p_token:S.token,p_id:null,p_dados:d});toast('Tarefa enviada para '+d.equipe_id);if(S.preDesp&&S.preDesp.ref){try{await rpc('ap_bo_msg_tratar',{p_token:S.token,p_id:S.preDesp.ref,p_resposta:`Tarefa criada para a equipe ${d.equipe_id}${d.os?' (OS '+d.os+')':''}.`})}catch(e){}}S.preDesp=null;await carregar(true);vDespacho()}catch(e){erro(e)}}}
 function ligarDesp(){document.querySelectorAll('[data-tc]').forEach(b=>b.onclick=async()=>{const m=prompt('Motivo do cancelamento:');if(!m)return;try{await rpc('ap_bo_tarefa_salvar',{p_token:S.token,p_id:b.dataset.tc,p_dados:{acao:'cancelar',motivo:m}});await carregar(true);vDespacho()}catch(e){erro(e)}});
  document.querySelectorAll('[data-tr]').forEach(b=>b.onclick=async()=>{const eq=prompt('Código da equipe que vai receber (ex.: HJ-02):');if(!eq)return;try{await rpc('ap_bo_tarefa_salvar',{p_token:S.token,p_id:b.dataset.tr,p_dados:{equipe_id:eq.toUpperCase().trim(),acao:'reenviar'}});await carregar(true);vDespacho()}catch(e){erro(e)}})}
 
@@ -341,14 +356,117 @@ function exportar(D){const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';const n
  const lin=[['Equipe','Turno','Atividade','Categoria','Início','Fim','Duração (min)','OS','Tarefa','Detalhes','Observação','Origem','Ajustado por','Motivo do ajuste','Lat início','Lng início']].concat(D.atividades.map(a=>[a.equipe_id,a.turno_id,a.tipo,catDe(a),dmh(a.inicio),a.fim?dmh(a.fim):'em andamento',Math.round((new Date(a.fim||now)-new Date(a.inicio))/60000),a.os,a.tarefa_id,Object.entries(a.dados||{}).map(x=>x.join(': ')).join(' | '),a.obs,a.origem,a.editado_por||(a.origem==='backoffice'?a.criado_por:''),a.motivo_edicao,a.lat_ini,a.lng_ini]));
  const blob=new Blob(['﻿'+lin.map(l=>l.map(q).join(';')).join('\n')],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`Apontamentos_${S.iDe||S.aDe}_${S.iAte||S.aAte}.csv`;a.click()}
 
+// ===== MENSAGENS (linha direta com as equipes) =====
+const MSG_T={servico_posterior:{ico:'🔁',nome:'Serviço posterior'},encaminhar:{ico:'➡️',nome:'Encaminhar p/ outra equipe'},apoio:{ico:'🆘',nome:'Pedido de apoio'},material:{ico:'📦',nome:'Material'},gps_off:{ico:'📍',nome:'GPS desligado'},gps_on:{ico:'📍',nome:'GPS restabelecido'},texto:{ico:'💬',nome:'Mensagem'},resposta:{ico:'✅',nome:'Resposta'}};
+function msgPend(){const M=(S.P&&S.P.mensagens)||[];return M.filter(m=>m.status==='aberta'||(m.de==='equipe'&&!m.lida_em&&m.tipo==='texto')).length}
+function bip(){try{const c=new (window.AudioContext||window.webkitAudioContext)();[0,.18].forEach(t=>{const o=c.createOscillator(),g=c.createGain();o.frequency.value=880;g.gain.value=.08;o.connect(g);g.connect(c.destination);o.start(c.currentTime+t);o.stop(c.currentTime+t+.12)})}catch(e){}}
+function avisarNovas(){const M=((S.P&&S.P.mensagens)||[]).filter(m=>m.de==='equipe'&&m.tipo!=='gps_on');const ids=new Set(M.map(m=>m.id));
+ if(S.vistos){const nv=M.filter(m=>!S.vistos.has(m.id)&&(m.status==='aberta'||!m.lida_em));if(nv.length){bip();const m=nv[nv.length-1];toast(`${(MSG_T[m.tipo]||MSG_T.texto).ico} ${m.equipe_id}: ${(MSG_T[m.tipo]||MSG_T.texto).nome}${m.texto?' – '+m.texto.slice(0,60):''}`,6000)}}
+ S.vistos=ids}
+function detMsg(m){const d=m.dados||{};return [d.motivo,d.equipe_destino?'Para: '+d.equipe_destino:'',m.os?'OS '+m.os:''].filter(Boolean).join(' · ')}
+function vMsg(auto){const M=S.P.mensagens||[];const E=S.P.equipes||[];const ab=M.filter(m=>m.status==='aberta').sort((a,b)=>a.em<b.em?-1:1);const now=agora();
+ const ultima={};const nl={};M.forEach(m=>{if(m.tipo==='gps_on')return;ultima[m.equipe_id]=m;if(m.de==='equipe'&&!m.lida_em)nl[m.equipe_id]=(nl[m.equipe_id]||0)+1});
+ const eqs=E.filter(e=>ultima[e.id]||e.turno).sort((a,b)=>((nl[b.id]||0)-(nl[a.id]||0))||((ultima[b.id]||{}).em||'').localeCompare((ultima[a.id]||{}).em||'')||a.id.localeCompare(b.id));
+ if(!S.msgEq||!eqs.some(e=>e.id===S.msgEq))S.msgEq=(eqs[0]||{}).id;
+ const card=m=>{const t=MSG_T[m.tipo]||MSG_T.texto;const pode=S.eu.editor;return `<div class="pd" style="border-left-color:${m.tipo==='gps_off'?'#D93A3E':m.tipo==='apoio'?'#F8DC00':'#E12379'}"><div class="h"><span>${t.ico}</span><span>${esc(t.nome)}</span><span class="sp"></span><span class="tag" style="background:var(--c0)">${esc(m.equipe_id)}</span></div>
+   <div class="x">${detMsg(m)?`<b>${esc(detMsg(m))}</b><br>`:''}${esc(m.texto||'')}</div><div class="sub" style="margin:0">${dmh(m.em)} · há ${dur(now-new Date(m.em))}${m.lat?` · <a href="https://www.google.com/maps?q=${m.lat},${m.lng}" target="_blank">📍 local</a>`:''}</div>
+   ${pode?`<div class="acts">${['servico_posterior','encaminhar'].includes(m.tipo)?`<button class="btn sm mg" data-ct="${m.id}">📋 Criar tarefa</button>`:''}${m.tipo==='gps_off'?`<button class="btn sm sec" data-ok="${m.id}">Ciente</button>`:`<button class="btn sm" data-rs="${m.id}">Responder e concluir</button>`}<button class="btn sm sec" data-ab="${esc(m.equipe_id)}">Conversa</button></div>`:''}</div>`};
+ const pedidos=ab.length?ab.map(card).join(''):'<div class="vz">Nenhum pedido em aberto. 👍</div>';
+ const lst=eqs.map(e=>{const u=ultima[e.id];return `<div data-q="${esc(e.id)}" class="${S.msgEq===e.id?'on':''}"><b>${esc(e.id)}</b>${nl[e.id]?` <span class="nb" style="background:var(--mg);color:#fff;border-radius:9px;padding:0 6px;font-size:11px">${nl[e.id]}</span>`:''}<small>${u?esc(((MSG_T[u.tipo]||{}).ico||'')+' '+(u.texto||(MSG_T[u.tipo]||MSG_T.texto).nome)):esc(e.nome)}</small></div>`}).join('')||'<div class="vz">Sem equipes</div>';
+ const T=M.filter(m=>m.equipe_id===S.msgEq&&m.tipo!=='gps_on');
+ const fio=T.map(m=>{if(m.tipo==='gps_off')return `<div class="bl sis">📍 GPS desligado às ${hm(m.em)}${m.status==='tratada'?' · '+esc(m.resposta||'tratado'):''}</div>`;const t=MSG_T[m.tipo]||MSG_T.texto;
+   return `<div class="bl ${m.de==='coi'?'coi':'eq'}">${!['texto','resposta'].includes(m.tipo)?`<b>${t.ico} ${esc(t.nome)}</b>${detMsg(m)?' · '+esc(detMsg(m)):''}<br>`:''}${esc(m.texto||'')}<small>${dmh(m.em)} · ${m.de==='coi'?esc(m.autor||'COI')+(m.lida_em?' · ✔✔ lida':' · ✔ enviada'):(m.status==='tratada'?'✔ tratado por '+esc(m.tratada_por||''):m.status==='aberta'?'⏳ em aberto':'')}</small></div>`}).join('')||'<div class="vz">Sem mensagens nos últimos 3 dias.</div>';
+ const html=`<div class="acts" style="justify-content:space-between"><div class="h1">Linha direta com as <span class="serif">equipes</span></div><button class="btn sec" id="mx">⬇ Exportar Excel</button></div>
+  <div class="sub">Pedidos do celular (serviço posterior, encaminhar para outra equipe, apoio) e alertas de GPS chegam aqui em até 20 s.</div>
+  <div class="msgg"><div class="box"><h3>Pedidos em aberto (${ab.length})</h3><div id="pds">${pedidos}</div></div>
+  <div class="box"><h3>Conversas</h3><div class="cv"><div class="eqs" id="ceq">${lst}</div><div class="th"><div class="ms" id="cms">${fio}</div>
+   ${S.eu.editor&&S.msgEq?`<div class="in"><input id="cin" placeholder="Mensagem para ${esc(S.msgEq)}…" maxlength="1000"><button class="btn" id="cen">Enviar</button></div>`:''}</div></div></div></div>`;
+ const rasc=$('#cin')?$('#cin').value:'';const foco=document.activeElement&&document.activeElement.id==='cin';
+ $('#main').innerHTML=html;if($('#cin')){$('#cin').value=rasc;if(foco)$('#cin').focus()}
+ const ms=$('#cms');if(ms)ms.scrollTop=ms.scrollHeight;
+ $('#mx').onclick=()=>exportarExcel();
+ document.querySelectorAll('#ceq [data-q]').forEach(d=>d.onclick=()=>{S.msgEq=d.dataset.q;marcarLidas();vMsg()});
+ document.querySelectorAll('[data-ab]').forEach(b=>b.onclick=()=>{S.msgEq=b.dataset.ab;marcarLidas();vMsg()});
+ if(!auto)marcarLidas();
+ const env=async()=>{const t=$('#cin').value.trim();if(!t)return;$('#cen').disabled=true;try{await rpc('ap_bo_msg_enviar',{p_token:S.token,p_equipe:S.msgEq,p_texto:t,p_ref:null});$('#cin').value='';await carregar(true);render()}catch(e){erro(e)}finally{if($('#cen'))$('#cen').disabled=false}};
+ if($('#cen')){$('#cen').onclick=env;$('#cin').onkeydown=e=>{if(e.key==='Enter')env()}}
+ document.querySelectorAll('[data-ok]').forEach(b=>b.onclick=()=>tratar(b.dataset.ok,'Ciente'));
+ document.querySelectorAll('[data-rs]').forEach(b=>b.onclick=()=>{const m=M.find(x=>x.id===b.dataset.rs);const ov=modal('Responder · '+esc(m.equipe_id),`<div class="sub" style="margin:0 0 8px">${esc((MSG_T[m.tipo]||MSG_T.texto).nome)} ${detMsg(m)?'· '+esc(detMsg(m)):''}<br>${esc(m.texto||'')}</div>
+   <div class="f"><label>Resposta para a equipe (aparece no celular)</label><input id="rr" placeholder="Ex.: Ok, apoio a caminho em 30 min"></div>
+   <div class="acts" style="flex-wrap:wrap;margin:8px 0">${['Ok, recebido','Apoio a caminho','Serviço posterior gerado','Encaminhado para outra equipe','Aguarde, retorno em breve'].map(x=>`<button class="btn sm sec" data-rp="${esc(x)}">${esc(x)}</button>`).join('')}</div>
+   <div class="acts" style="justify-content:flex-end"><button class="btn" id="rk">Enviar e concluir</button></div>`,640);
+  ov.querySelectorAll('[data-rp]').forEach(x=>x.onclick=()=>ov.querySelector('#rr').value=x.dataset.rp);
+  ov.querySelector('#rk').onclick=async()=>{const r=ov.querySelector('#rr').value.trim();if(!r)return toast('Escreva a resposta');ov.remove();tratar(m.id,r)}});
+ document.querySelectorAll('[data-ct]').forEach(b=>b.onclick=()=>{const m=M.find(x=>x.id===b.dataset.ct);const d=m.dados||{};const tar=(S.P.tarefas||[]).find(t=>t.os&&t.os===m.os)||{};
+  S.preDesp={ref:m.id,de:m.equipe_id,os:m.os||'',servico:m.tipo==='encaminhar'?(d.equipe_destino?d.equipe_destino+' – ':'')+(tar.servico||'Serviço encaminhado'):(d.motivo||'Serviço posterior'),
+   obs:[`Pedido da equipe ${m.equipe_id}`,d.motivo&&m.tipo==='encaminhar'?d.motivo:'',m.texto].filter(Boolean).join(' · '),lat:m.lat!=null?String(m.lat).replace('.',','):(tar.lat!=null?String(tar.lat).replace('.',','):''),lng:m.lng!=null?String(m.lng).replace('.',','):(tar.lng!=null?String(tar.lng).replace('.',','):''),municipio:tar.municipio||'',bairro:tar.bairro||''};
+  S.aba='despacho';render()})}
+async function marcarLidas(){const M=S.P.mensagens||[];if(!S.msgEq||!M.some(m=>m.equipe_id===S.msgEq&&m.de==='equipe'&&!m.lida_em))return;
+ try{await rpc('ap_bo_msg_lidas',{p_token:S.token,p_equipe:S.msgEq});M.forEach(m=>{if(m.equipe_id===S.msgEq&&m.de==='equipe'&&!m.lida_em)m.lida_em=new Date().toISOString()});render(true,'nav')}catch(e){}}
+async function tratar(id,resp){try{await rpc('ap_bo_msg_tratar',{p_token:S.token,p_id:id,p_resposta:resp});toast('Pedido concluído');await carregar(true);render()}catch(e){erro(e)}}
+
+// ===== EXPORTAR EXCEL (.xlsx gerado no navegador) =====
+const XL=(()=>{const T=[];for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;T[n]=c>>>0}
+ const crc=b=>{let c=~0;for(let i=0;i<b.length;i++)c=T[(c^b[i])&255]^(c>>>8);return (~c)>>>0};const enc=new TextEncoder();
+ const x=v=>String(v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'');
+ const col=i=>{let s='';i++;while(i){const m=(i-1)%26;s=String.fromCharCode(65+m)+s;i=Math.floor((i-1)/26)}return s};
+ function zip(files){const parts=[],cd=[];let off=0;const u16=n=>[n&255,n>>8&255],u32=n=>[n&255,n>>8&255,n>>16&255,n>>>24&255];
+  files.forEach(f=>{const nm=enc.encode(f.n),d=enc.encode(f.d),c=crc(d);const h=new Uint8Array([80,75,3,4,20,0,0,8,0,0,0,0,0,0,...u32(c),...u32(d.length),...u32(d.length),...u16(nm.length),0,0]);
+   parts.push(h,nm,d);cd.push(new Uint8Array([80,75,1,2,20,0,20,0,0,8,0,0,0,0,0,0,...u32(c),...u32(d.length),...u32(d.length),...u16(nm.length),0,0,0,0,0,0,0,0,0,0,0,0,...u32(off)]),nm);off+=h.length+nm.length+d.length});
+  const cdl=cd.reduce((a,b)=>a+b.length,0);return new Blob([...parts,...cd,new Uint8Array([80,75,5,6,0,0,0,0,...u16(files.length),...u16(files.length),...u32(cdl),...u32(off),0,0])],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})}
+ // célula: número → n; Date → data/hora (estilo 2); texto → inlineStr
+ function sheet(cab,linhas,larg){const r=[cab,...linhas].map((l,ri)=>`<row r="${ri+1}">${l.map((v,ci)=>{const ref=col(ci)+(ri+1);if(v==null||v==='')return '';
+   if(ri===0)return `<c r="${ref}" t="inlineStr" s="1"><is><t>${x(v)}</t></is></c>`;
+   if(v instanceof Date){if(isNaN(v))return '';return `<c r="${ref}" s="2"><v>${((v.getTime()-3*3600e3)/864e5+25569).toFixed(6)}</v></c>`}
+   if(typeof v==='number'&&isFinite(v))return `<c r="${ref}"><v>${v}</v></c>`;return `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${x(v)}</t></is></c>`}).join('')}</row>`).join('');
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>${cab.map((c,i)=>`<col min="${i+1}" max="${i+1}" width="${(larg&&larg[i])||Math.min(40,Math.max(10,String(c).length+3))}" customWidth="1"/>`).join('')}</cols><sheetData>${r}</sheetData>${linhas.length?`<autoFilter ref="A1:${col(cab.length-1)}${linhas.length+1}"/>`:''}</worksheet>`}
+ function livro(abas){const f=[{n:'[Content_Types].xml',d:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${abas.map((a,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}</Types>`},
+  {n:'_rels/.rels',d:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`},
+  {n:'xl/workbook.xml',d:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${abas.map((a,i)=>`<sheet name="${x(a.nome)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('')}</sheets>${abas.some(a=>a.l.length)?`<definedNames>${abas.map((a,i)=>a.l.length?`<definedName name="_xlnm._FilterDatabase" localSheetId="${i}" hidden="1">'${x(a.nome)}'!$A$1:$${col(a.c.length-1)}$${a.l.length+1}</definedName>`:'').join('')}</definedNames>`:''}</workbook>`},
+  {n:'xl/_rels/workbook.xml.rels',d:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${abas.map((a,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('')}<Relationship Id="rId${abas.length+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`},
+  {n:'xl/styles.xml',d:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="dd/mm/yyyy hh:mm"/></numFmts><fonts count="2"><font><sz val="10"/><name val="Arial"/></font><font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Arial"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF0027BD"/></patternFill></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`}];
+  abas.forEach((a,i)=>f.push({n:`xl/worksheets/sheet${i+1}.xml`,d:sheet(a.c,a.l,a.w)}));return zip(f)}
+ return {livro}})();
+function exportarExcel(){const hoje=ymd(new Date());
+ const ov=modal('Exportar dados das equipes (Excel)',`<div class="fr"><div class="f"><label>De</label><input type="date" id="xd" value="${S.aDe||hoje}"></div><div class="f"><label>Até</label><input type="date" id="xa" value="${S.aAte||hoje}"></div>
+  <div class="f"><label>Equipe</label><select id="xe"><option value="">Todas</option>${(S.P.equipes||[]).map(e=>`<option ${S.aEq===e.id?'selected':''} value="${esc(e.id)}">${esc(e.id)} – ${esc(e.nome)}</option>`).join('')}</select></div></div>
+  <div style="margin:12px 0;display:flex;flex-wrap:wrap;gap:14px">${[['res','Resumo por equipe',1],['tur','Turnos',1],['atv','Atividades',1],['tar','Tarefas',1],['msg','Mensagens e pedidos',1],['pos','Posições de GPS (arquivo grande)',0]].map(o=>`<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-x="${o[0]}" ${o[2]?'checked':''}>${o[1]}</label>`).join('')}</div>
+  <div class="sub" id="xs" style="margin:0 0 8px">Uma aba por tipo de dado, com filtro e datas no formato do Excel.</div><div class="acts" style="justify-content:flex-end"><button class="btn" id="xg">⬇ Gerar Excel</button></div>`,720);
+ ov.querySelector('#xg').onclick=async()=>{const de=ov.querySelector('#xd').value,ate=ov.querySelector('#xa').value,eq=ov.querySelector('#xe').value||null;if(!de||!ate||ate<de)return toast('Confira o período');
+  const sel=k=>ov.querySelector(`[data-x="${k}"]`).checked;const st=t=>ov.querySelector('#xs').textContent=t;const bt=ov.querySelector('#xg');bt.disabled=true;
+  try{const p_de=dia(de).toISOString(),p_ate=new Date(dia(ate).getTime()+864e5).toISOString();st('Buscando dados…');
+   const D=await rpc('ap_bo_exportar',{p_token:S.token,p_de,p_ate,p_equipe:eq});const now=agora();
+   const dt=v=>v?new Date(v):null,min=(a,b)=>a&&b?Math.round((new Date(b)-new Date(a))/60000):null,h=ms=>Math.round(ms/36e5*100)/100;const nome=Object.fromEntries((D.equipes||[]).map(e=>[e.id,e.nome]));
+   const abas=[];const A=D.atividades.filter(a=>a.status!=='cancelada');
+   if(sel('res')){const R={};const r=id=>R[id]=R[id]||{tur:0,ht:0,cat:{},exec:0,tr:0,tc:0,trc:0,msg:0,ped:0,gps:0};
+    D.turnos.forEach(t=>{const x=r(t.equipe_id);x.tur++;x.ht+=new Date(t.fim||now)-new Date(t.inicio)});
+    A.forEach(a=>{const x=r(a.equipe_id);const c=catDe(a);x.cat[c]=(x.cat[c]||0)+(new Date(a.fim||now)-new Date(a.inicio));if(c==='Produtiva')x.exec++});
+    D.tarefas.forEach(t=>{if(!t.equipe_id)return;const x=r(t.equipe_id);x.tr++;if(t.status==='concluida')x.tc++;if(t.status==='recusada')x.trc++});
+    D.mensagens.forEach(m=>{const x=r(m.equipe_id);if(m.tipo==='gps_off')x.gps++;else if(m.de==='equipe'&&['servico_posterior','encaminhar','apoio'].includes(m.tipo))x.ped++;else if(m.de==='equipe'&&m.tipo==='texto')x.msg++});
+    const cats=Object.keys(CATEGORIAS);abas.push({nome:'Resumo',c:['Equipe','Nome','Turnos','Horas em turno',...cats.map(c=>'Horas '+c.toLowerCase()),'% produtivo','Execuções','Tarefas recebidas','Tarefas concluídas','Tarefas recusadas','Pedidos ao COI','Mensagens','Quedas de GPS'],
+     l:Object.keys(R).sort().map(id=>{const x=R[id];return [id,nome[id]||'',x.tur,h(x.ht),...cats.map(c=>h(x.cat[c]||0)),x.ht?Math.round((x.cat.Produtiva||0)/x.ht*1000)/10:0,x.exec,x.tr,x.tc,x.trc,x.ped,x.msg,x.gps]})})}
+   if(sel('tur'))abas.push({nome:'Turnos',c:['Equipe','Início','Fim','Duração (h)','Integrantes','Placa','Km inicial','Km final','Km rodado','Lat início','Lng início','Lat fim','Lng fim'],
+     l:D.turnos.map(t=>[t.equipe_id,dt(t.inicio),dt(t.fim),h(new Date(t.fim||now)-new Date(t.inicio)),t.integrantes,t.placa,t.km_ini!=null?+t.km_ini:null,t.km_fim!=null?+t.km_fim:null,t.km_ini!=null&&t.km_fim!=null?+t.km_fim-t.km_ini:null,t.lat_ini,t.lng_ini,t.lat_fim,t.lng_fim])});
+   if(sel('atv'))abas.push({nome:'Atividades',c:['Equipe','Atividade','Categoria','Início','Fim','Duração (min)','Situação','OS','Tarefa','Detalhes','Observação','Origem','Ajustado por','Motivo do ajuste','Lat início','Lng início','Lat fim','Lng fim'],w:[10,26,18,17,17,12,12,12,12,40,30,10,16,30],
+     l:D.atividades.map(a=>[a.equipe_id,a.tipo,catDe(a),dt(a.inicio),dt(a.fim),min(a.inicio,a.fim||now.toISOString()),a.status==='em_andamento'?'em andamento':a.status+(a.fim_auto?' (auto)':''),a.os,a.tarefa_id,Object.entries(a.dados||{}).map(x=>x.join(': ')).join(' | '),a.obs,a.origem,a.editado_por||(a.origem==='backoffice'?a.criado_por:''),a.motivo_edicao,a.lat_ini,a.lng_ini,a.lat_fim,a.lng_fim])});
+   if(sel('tar'))abas.push({nome:'Tarefas',c:['Nº','Equipe','OS','Serviço','Prioridade','Município','Bairro','Endereço','Referência','Situação','Criada em','Criada por','Aceita em','Deslocamento em','Chegada/início em','Fim em','Min. até aceitar','Min. deslocamento','Min. execução','Resultado','Motivo','Observação'],w:[6,10,12,26,10,14,16,30,20,14,17,18,17,17,17,17],
+     l:D.tarefas.map(t=>[t.seq,t.equipe_id,t.os,t.servico,t.prioridade,t.municipio,t.bairro,t.endereco,t.referencia,(ST_T[t.status]||[t.status])[0],dt(t.criada_em),t.criada_por,dt(t.aceita_em),dt(t.deslocamento_em),dt(t.inicio_em),dt(t.fim_em),min(t.criada_em,t.aceita_em),min(t.deslocamento_em,t.inicio_em),min(t.inicio_em,t.fim_em),t.resultado,t.motivo,t.obs])});
+   if(sel('msg'))abas.push({nome:'Mensagens',c:['Equipe','Data/hora','De','Autor','Tipo','Texto','Motivo','Equipe destino','OS','Situação','Lida em','Tratada em','Tratada por','Resposta','Min. até tratar','Lat','Lng'],w:[10,17,8,16,24,40,24,18,12,10,17,17,16,30,10],
+     l:D.mensagens.map(m=>[m.equipe_id,dt(m.em),m.de==='coi'?'COI':'Equipe',m.autor,(MSG_T[m.tipo]||{nome:m.tipo}).nome,m.texto,(m.dados||{}).motivo,(m.dados||{}).equipe_destino,m.os,m.status,dt(m.lida_em),dt(m.tratada_em),m.tratada_por,m.resposta,min(m.em,m.tratada_em),m.lat,m.lng])});
+   if(sel('pos')){const P=[];let apos=0;for(let i=0;i<60;i++){const b=await rpc('ap_bo_posicoes',{p_token:S.token,p_de,p_ate,p_equipe:eq,p_apos:apos});if(!b||!b.length)break;P.push(...b);apos=b[b.length-1][0];st(`Posições de GPS: ${P.length.toLocaleString('pt-BR')}…`);if(b.length<5000)break}
+    abas.push({nome:'Posições GPS',c:['Equipe','Data/hora','Latitude','Longitude','Precisão (m)','Velocidade (m/s)','Bateria (%)'],l:P.map(x=>[x[1],dt(x[2]),x[3],x[4],x[5],x[6],x[7]])})}
+   if(!abas.length)return toast('Marque ao menos uma aba');st('Montando o arquivo…');
+   const b=XL.livro(abas);const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`Equipes_campo_${de}_a_${ate}${eq?'_'+eq:''}.xlsx`;document.body.appendChild(a);a.click();a.remove();
+   st(`Pronto: ${abas.map(x=>x.nome+' ('+x.l.length+')').join(' · ')}`);toast('Excel gerado')}catch(e){erro(e);st('Erro ao exportar')}finally{bt.disabled=false}}}
+
 // ===== APONTAMENTOS =====
 async function vApont(){const hoje=ymd(new Date());S.aDe=S.aDe||hoje;S.aAte=S.aAte||hoje;
- $('#main').innerHTML=`<div class="acts" style="justify-content:space-between"><div class="h1">Apontamentos</div><div class="acts">${S.eu.editor?'<button class="btn" id="an">+ Lançar atividade</button>':''}<button class="btn sec" id="ax">⬇ Exportar CSV</button></div></div>
+ $('#main').innerHTML=`<div class="acts" style="justify-content:space-between"><div class="h1">Apontamentos</div><div class="acts">${S.eu.editor?'<button class="btn" id="an">+ Lançar atividade</button>':''}<button class="btn" id="axl">⬇ Exportar Excel (equipes)</button><button class="btn sec" id="ax">⬇ CSV desta lista</button></div></div>
  <div class="filtros"><label>De</label><input type="date" id="a1" value="${S.aDe}"><label>até</label><input type="date" id="a2" value="${S.aAte}"><select id="a3"><option value="">Todas as equipes</option>${(S.P.equipes||[]).map(e=>`<option ${S.aEq===e.id?'selected':''} value="${esc(e.id)}">${esc(e.id)}</option>`).join('')}</select>
  <select id="a4"><option value="">Todas as atividades</option>${tipos().map(t=>`<option ${S.aTp===t.nome?'selected':''}>${esc(t.nome)}</option>`).join('')}</select><select id="a5"><option value="">Celular e COI</option><option value="backoffice" ${S.aOr==='backoffice'?'selected':''}>Só lançados/ajustados pelo COI</option></select></div><div id="at"><div class="vz">Carregando…</div></div>`;
  const ch=(id,k)=>$(id).onchange=e=>{S[k]=e.target.value;vApont()};ch('#a1','aDe');ch('#a2','aAte');ch('#a3','aEq');ch('#a4','aTp');ch('#a5','aOr');if($('#an'))$('#an').onclick=()=>editarAtiv(null,S.aEq||null);
  let D;try{D=await periodo(S.aDe,S.aAte,S.aEq)}catch(e){return erro(e)}let A=D.atividades.filter(a=>(!S.aTp||a.tipo===S.aTp)&&(!S.aOr||a.origem==='backoffice'||a.editado_por));const now=agora();
- $('#ax').onclick=()=>exportar({atividades:A});
+ $('#ax').onclick=()=>exportar({atividades:A});$('#axl').onclick=()=>exportarExcel();
  $('#at').innerHTML=`<div class="sub" style="margin:0 0 8px">${A.length} apontamento(s)${S.eu.editor?' · clique para ajustar':''}</div><div style="overflow:auto;max-height:70vh"><table class="t"><tr><th>Equipe</th><th>Atividade</th><th>Início</th><th>Fim</th><th class="num">Duração</th><th>OS</th><th>Detalhes</th><th>Origem</th><th>GPS</th></tr>
  ${A.slice().reverse().map(a=>{const t=tipo(a.tipo);const ac=t.esp&&new Date(a.fim||now)-new Date(a.inicio)>t.esp*60000;return `<tr class="r" data-a="${esc(a.id)}"><td><b>${esc(a.equipe_id)}</b></td><td><span style="color:${cor(catDe(a))}">●</span> ${esc(a.tipo)}</td><td>${dmh(a.inicio)}</td><td>${a.fim?dmh(a.fim):'<b>agora</b>'}${a.fim_auto?' <small title="Encerrada ao iniciar a próxima">↪</small>':''}</td>
   <td class="num" style="${ac?'color:#D93A3E;font-weight:700':''}">${dur(new Date(a.fim||now)-new Date(a.inicio))}</td><td>${esc(a.os||'')}</td><td>${esc(Object.values(a.dados||{}).filter(Boolean).join(' · '))}${a.obs?' · '+esc(a.obs):''}</td>

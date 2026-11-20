@@ -82,6 +82,20 @@ button,input,select,textarea{font-family:inherit;font-size:16px;color:var(--tx)}
 .toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);background:var(--tx);color:#fff;padding:12px 18px;border-radius:12px;font-weight:700;z-index:50;max-width:90%;text-align:center}
 .muted{color:var(--q);font-size:13px}
 .vz{text-align:center;color:var(--q);padding:24px 10px}
+.fab{position:fixed;right:16px;bottom:calc(84px + env(safe-area-inset-bottom));width:60px;height:60px;border-radius:50%;border:0;background:var(--mg);color:#fff;font-size:28px;box-shadow:0 6px 18px rgba(11,26,92,.35);z-index:20}
+.fab .bd{position:absolute;top:-4px;right:-4px;background:var(--ap);color:var(--tx);border-radius:12px;font-size:13px;font-weight:800;padding:2px 7px}
+.chat{display:flex;flex-direction:column;gap:8px;max-height:42vh;overflow:auto;padding:4px 2px 10px}
+.bl{max-width:84%;padding:9px 12px;border-radius:14px;font-size:15px;line-height:1.35;word-wrap:break-word}
+.bl.eu{align-self:flex-end;background:var(--az);color:#fff;border-bottom-right-radius:4px}
+.bl.coi{align-self:flex-start;background:var(--c0);color:var(--tx);border-bottom-left-radius:4px}
+.bl small{display:block;font-size:11px;opacity:.75;margin-top:3px}
+.bl .tg{display:inline-block;font-size:11px;font-weight:800;background:rgba(255,255,255,.22);border-radius:8px;padding:1px 7px;margin-bottom:3px}
+.bl.coi .tg{background:var(--tq)}
+.qa{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:6px 0 10px}
+.qa button{border:2px solid var(--c1);background:#fff;border-radius:12px;padding:12px 6px;font-weight:700;color:var(--az);font-size:14px}
+.qa button b{display:block;font-size:22px}
+.gpsblk{min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:24px 20px;text-align:center;background:#fff}
+.gpsblk ol{text-align:left;margin:14px auto;max-width:420px;line-height:1.6;color:var(--tx)}
 </style>
 </head>
 <body>
@@ -148,7 +162,7 @@ function inicioDia(){const d=new Intl.DateTimeFormat('sv-SE',{timeZone:TZ}).form
 
 // ===== estado local (funciona sem sinal) =====
 const LS={get:(k,d)=>{try{const v=localStorage.getItem('ap_'+k);return v?JSON.parse(v):d}catch(e){return d}},set:(k,v)=>{try{localStorage.setItem('ap_'+k,JSON.stringify(v))}catch(e){}}};
-const S={tok:LS.get('tok',null),eq:LS.get('eq',null),est:LS.get('est',{turno:null,atividades:[],tarefas:[],config:{}}),fila:LS.get('fila',[]),aba:'ativ',online:navigator.onLine,sync:false,pos:null,ultPosEnv:0,wake:null};
+const S={tok:LS.get('tok',null),eq:LS.get('eq',null),est:LS.get('est',{turno:null,atividades:[],tarefas:[],config:{},mensagens:[]}),fila:LS.get('fila',[]),aba:'ativ',online:navigator.onLine,sync:false,pos:null,ultPosEnv:0,wake:null};
 function salvar(){LS.set('tok',S.tok);LS.set('eq',S.eq);LS.set('est',S.est);LS.set('fila',S.fila)}
 function tipos(){const t=(S.est.config&&S.est.config.tipos)||TIPOS_PADRAO;return t.filter(x=>x.ativo!==false)}
 function tipo(nomeOuId){return tipos().find(t=>t.nome===nomeOuId||t.id===nomeOuId)||TIPOS_PADRAO.find(t=>t.nome===nomeOuId)||{nome:nomeOuId,cat:'Apoio operacional',ico:'•',esp:30}}
@@ -162,6 +176,8 @@ function aplicar(op){const E=S.est;E.atividades=E.atividades||[];
   if(op.op==='turno_fim'){fecha(op.em);E.turno=null}
   if(op.op==='iniciar'){fecha(op.em);E.atividades.push({id:op.id,tipo:op.tipo,categoria:op.categoria,inicio:op.em,status:'em_andamento',os:op.os,tarefa_id:op.tarefa_id,dados:op.dados||{}})}
   if(op.op==='finalizar'){const a=E.atividades.find(x=>x.id===op.id);if(a){a.status='finalizada';a.fim=op.em;a.dados=Object.assign({},a.dados,op.dados||{})}}
+  if(op.op==='msg'&&!/^gps_/.test(op.tipo)){E.mensagens=E.mensagens||[];E.mensagens.push({id:op.id,de:'equipe',tipo:op.tipo,texto:op.texto,dados:op.dados||{},os:op.os,em:op.em,status:'enviando'})}
+  if(op.op==='msg_lida'){(E.mensagens||[]).forEach(m=>{if(m.de==='coi'&&!m.lida_em)m.lida_em=op.em})}
   if(op.op==='tarefa'){const t=(E.tarefas||[]).find(x=>x.id===op.id);if(t){t.status={aceitar:'aceita',recusar:'recusada',deslocamento:'em_deslocamento',inicio:'em_execucao',concluir:'concluida'}[op.acao]||t.status;if(['recusada','concluida'].includes(t.status))E.tarefas=E.tarefas.filter(x=>x.id!==t.id)}}
 }
 function enfileirar(op){op.qid=uid();op.em=op.em||new Date().toISOString();if(op.op!=='pos')aplicar(op);S.fila.push(op);
@@ -171,23 +187,47 @@ function enfileirar(op){op.qid=uid();op.em=op.em||new Date().toISOString();if(op
 async function sincronizar(){if(S.sync||!S.tok)return;S.sync=true;const lote=S.fila.slice(0,60);
   try{const r=await rpc('ap_sync',{p_token:S.tok,p_ops:lote,p_desde:inicioDia().toISOString()});S.online=true;
     const ok=new Set(r.ok||[]);S.fila=S.fila.filter(o=>!ok.has(o.qid));
-    if(!S.fila.filter(o=>o.op!=='pos').length){S.est=r.estado}else{S.est.tarefas=r.estado.tarefas;S.est.config=r.estado.config}
+    const pendMsg=(S.est.mensagens||[]).filter(m=>S.fila.some(o=>o.op==='msg'&&o.id===m.id));const lidaPend=S.fila.some(o=>o.op==='msg_lida');
+    if(!S.fila.filter(o=>o.op!=='pos').length){S.est=r.estado}else{S.est.tarefas=r.estado.tarefas;S.est.config=r.estado.config;S.est.mensagens=r.estado.mensagens||[]}
+    S.est.mensagens=(S.est.mensagens||[]).concat(pendMsg.filter(m=>!(S.est.mensagens||[]).some(x=>x.id===m.id)));
+    if(lidaPend)S.est.mensagens.forEach(m=>{if(m.de==='coi')m.lida_em=m.lida_em||new Date().toISOString()});
+    avisarMsgs();
     if(r.estado&&r.estado.equipe)S.eq=r.estado.equipe;salvar();
     if(S.fila.length)setTimeout(sincronizar,500)}
   catch(e){if(e.servidor&&/Sessão expirada/.test(e.message)){S.sync=false;return sair(true)}S.online=false}
   finally{S.sync=false;desenharTopo();if(!document.querySelector('.ov'))render()}}
 
 // ===== GPS =====
-function iniciarGPS(){if(!navigator.geolocation||S.watch)return;
-  S.watch=navigator.geolocation.watchPosition(p=>{S.pos={lat:p.coords.latitude,lng:p.coords.longitude,prec:p.coords.accuracy,vel:p.coords.speed,em:Date.now()};
-    if(S.est.turno&&Date.now()-S.ultPosEnv>120000)enviarPos();desenharTopo()},
-    e=>{S.gpsErro=e.code===1?'GPS bloqueado':'Sem GPS';desenharTopo()},{enableHighAccuracy:true,maximumAge:30000,timeout:30000})}
+const GPS_MAX=180000; // posição com mais de 3 min = GPS perdido
+function gpsOk(){return !!(S.pos&&Date.now()-S.pos.em<GPS_MAX)}
+function gpsVerificar(){if(!S.tok)return;const ok=gpsOk();
+  if(S.est.turno&&S.gpsEstado!==undefined&&ok!==S.gpsEstado){enfileirar(Object.assign({op:'msg',id:uid(),tipo:ok?'gps_on':'gps_off',texto:ok?'GPS restabelecido':'GPS desligado ou sem sinal no celular'},ok?geo():{}))}
+  if(S.est.turno||S.gpsEstado!==undefined)S.gpsEstado=ok;
+  if(!ok){document.querySelectorAll('.ov').forEach(o=>o.remove());if(!$('#gpsblk'))render()}else if($('#gpsblk'))render()}
+function gpsTentar(){if(!navigator.geolocation)return;if(S.watch!=null){navigator.geolocation.clearWatch(S.watch);S.watch=null}
+  navigator.geolocation.getCurrentPosition(p=>{S.gpsErro=null;S.pos={lat:p.coords.latitude,lng:p.coords.longitude,prec:p.coords.accuracy,vel:p.coords.speed,em:Date.now()};gpsVerificar();desenharTopo()},
+    e=>{S.gpsErro=e.code===1?'GPS bloqueado':'Sem GPS';gpsVerificar()},{enableHighAccuracy:true,maximumAge:20000,timeout:25000});iniciarGPS()}
+function iniciarGPS(){if(!navigator.geolocation||S.watch!=null)return;
+  S.watch=navigator.geolocation.watchPosition(p=>{const vinha=gpsOk();S.gpsErro=null;S.pos={lat:p.coords.latitude,lng:p.coords.longitude,prec:p.coords.accuracy,vel:p.coords.speed,em:Date.now()};
+    if(S.est.turno&&Date.now()-S.ultPosEnv>120000)enviarPos();if(!vinha)gpsVerificar();desenharTopo()},
+    e=>{S.gpsErro=e.code===1?'GPS bloqueado':'Sem GPS';if(e.code===1)S.pos=null;gpsVerificar();desenharTopo()},{enableHighAccuracy:true,maximumAge:30000,timeout:30000})}
 async function enviarPos(){if(!S.pos||!S.est.turno)return;S.ultPosEnv=Date.now();let bat=null;try{if(navigator.getBattery){const b=await navigator.getBattery();bat=Math.round(b.level*100)}}catch(e){}
   enfileirar({op:'pos',lat:+S.pos.lat.toFixed(6),lng:+S.pos.lng.toFixed(6),prec:Math.round(S.pos.prec||0),vel:S.pos.vel,bat})}
-async function telaLigada(){try{if(S.wake){await S.wake.release();S.wake=null;toast('Tela pode apagar');}else{S.wake=await navigator.wakeLock.request('screen');toast('Tela ficará ligada (GPS ativo)');S.wake.addEventListener('release',()=>{S.wake=null;desenharTopo()})}}catch(e){toast('Seu celular não permite manter a tela ligada')}desenharTopo()}
+// tela sempre ligada durante o turno (sem opção de desligar)
+async function manterTela(){if(!S.tok||!S.est.turno||S.wake||document.hidden||!('wakeLock' in navigator))return;
+  try{S.wake=await navigator.wakeLock.request('screen');S.wake.addEventListener('release',()=>{S.wake=null})}catch(e){}}
 
 // ===== telas =====
-function render(){if(!S.tok)return telaLogin();if(!S.est.turno)return telaTurno();telaPrincipal()}
+function render(){if(!S.tok)return telaLogin();if(!gpsOk())return telaGPS();if(!S.est.turno)telaTurno();else telaPrincipal();manterTela();botaoChat()}
+function telaGPS(){const neg=S.gpsErro==='GPS bloqueado';$('#fab')&&$('#fab').remove();
+  $('#app').innerHTML=`<div class="gpsblk" id="gpsblk"><div style="font-size:64px">📍</div><h2 style="margin:6px 0;color:var(--az)">${!S.gpsErro&&!S.pos?'Procurando o GPS…':S.pos?'GPS desligado ou sem sinal':'Ligue o GPS para continuar'}</h2>
+   <div class="muted">O COI Campo só funciona com a localização ligada. ${S.est.turno?'O COI já foi avisado de que o GPS caiu.':''}</div>
+   <ol>${neg?'<li>Toque no cadeado ao lado do endereço do navegador e permita <b>Localização</b>.</li><li>Ou em Configurações → Apps → Chrome → Permissões → Localização → <b>Permitir</b>.</li>':'<li>Puxe a barra de cima do celular e ligue a <b>Localização</b>.</li><li>Use o modo <b>alta precisão</b>, se o celular perguntar.</li><li>Se estiver em local fechado, vá para perto de uma janela ou área aberta.</li>'}</ol>
+   <button class="big" style="flex:none;width:100%;max-width:420px;margin:6px auto 0" id="g_t">↻ Tentar de novo</button>
+   <div class="muted" style="margin-top:14px;font-size:13px" id="g_s">${S.gpsErro?esc(S.gpsErro):'Procurando sinal…'}</div>
+   <a href="#" class="muted" style="margin-top:22px" id="g_o">Sair da equipe</a></div>`;
+  $('#g_t').onclick=()=>{$('#g_s').textContent='Procurando sinal…';vib(30);gpsTentar()};
+  $('#g_o').onclick=e=>{e.preventDefault();if(S.fila.filter(o=>o.op!=='pos').length&&!confirm('Há apontamentos ainda não enviados. Sair mesmo assim? Eles serão perdidos.'))return;sair()}}
 function topo(){return `<div class="top"><div class="eq">${esc(S.eq?S.eq.nome:'')}<small>${esc(S.eq?S.eq.id:'')}${S.est.turno&&S.est.turno.placa?' · '+esc(S.est.turno.placa):''}</small></div><div class="sp"></div><div id="tp"></div><button class="menu" id="mn">⋮</button></div>`}
 function desenharTopo(){const el=$('#tp');if(!el)return;const pend=S.fila.filter(o=>o.op!=='pos').length;
   const gps=S.pos&&Date.now()-S.pos.em<180000?`<span class="pill" style="background:rgba(255,255,255,.18)">📍 GPS</span>`:`<span class="pill" style="background:#FFF3B8;color:#0B1A5C">📍 ${esc(S.gpsErro||'sem GPS')}</span>`;
@@ -201,8 +241,8 @@ async function telaLogin(msg){let L=LS.get('equipes',[]);
   <button class="big" style="width:100%" id="l_b">Entrar</button></div>`;
   const pop=()=>{$('#l_eq').innerHTML='<option value="">Selecione a equipe…</option>'+L.map(e=>`<option value="${esc(e.id)}" ${LS.get('ult_eq','')===e.id?'selected':''}>${esc(e.id)} – ${esc(e.nome)}</option>`).join('')};pop();
   try{L=await rpc('ap_equipes_login',{})||[];LS.set('equipes',L);pop()}catch(e){if(!L.length)$('#l_eq').innerHTML='<option value="">Sem sinal para carregar equipes</option>'}
-  $('#l_b').onclick=async()=>{const eq=$('#l_eq').value;if(!eq)return toast('Escolha a equipe');try{const r=await rpc('ap_login',{p_equipe:eq,p_senha:$('#l_s').value});
-    S.tok=r.token;S.eq=r.equipe;LS.set('ult_eq',eq);S.fila=[];S.est={turno:null,atividades:[],tarefas:[],config:{}};salvar();vib(40);await sincronizar();render()}catch(e){telaLogin(e.servidor?e.message:'Sem conexão. Tente de novo com sinal.')}};
+  $('#l_b').onclick=async()=>{const eq=$('#l_eq').value;if(!eq)return toast('Escolha a equipe');if(!gpsOk()){gpsTentar();return toast('Ligue o GPS (localização) do celular para entrar',3500)}try{const r=await rpc('ap_login',{p_equipe:eq,p_senha:$('#l_s').value});
+    S.tok=r.token;S.eq=r.equipe;LS.set('ult_eq',eq);S.fila=[];S.est={turno:null,atividades:[],tarefas:[],config:{},mensagens:[]};salvar();vib(40);await sincronizar();render()}catch(e){telaLogin(e.servidor?e.message:'Sem conexão. Tente de novo com sinal.')}};
 }
 function telaTurno(){
   $('#app').innerHTML=topo()+`<div class="wrap"><div class="card" style="text-align:center;padding:22px 16px"><div style="font-size:44px">🌅</div><h2 style="margin:6px 0 4px;color:var(--az)">Iniciar turno</h2><div class="muted">Confirme a equipe e o veículo de hoje</div></div>
@@ -212,7 +252,7 @@ function telaTurno(){
   <button class="big ok" style="width:100%" id="t_b">▶ Iniciar turno</button></div></div>`;ligarMenu();desenharTopo();
   $('#t_b').onclick=()=>{LS.set('ult_integrantes',$('#t_int').value);LS.set('ult_placa',$('#t_pl').value.toUpperCase());vib(60);
     enfileirar(Object.assign({op:'turno_ini',id:uid(),integrantes:$('#t_int').value.trim(),placa:$('#t_pl').value.trim().toUpperCase(),km:$('#t_km').value},geo()));
-    S.ultPosEnv=0;enviarPos();toast('Turno iniciado. Bom trabalho!')};
+    S.ultPosEnv=0;S.gpsEstado=gpsOk();enviarPos();manterTela();toast('Turno iniciado. Bom trabalho!')};
 }
 function telaPrincipal(){const T=(S.est.tarefas||[]);const novas=T.filter(t=>t.status==='enviada').length;
   $('#app').innerHTML=topo()+`<div class="wrap"><div id="at"></div><div id="tf"></div><div id="cx"></div></div>
@@ -298,21 +338,59 @@ function abaDia(){const tu=S.est.turno;const ini=new Date(tu.inicio);const agora
 }
 function ligarMenu(){const m=$('#mn');if(!m)return;m.onclick=()=>{const ov=document.createElement('div');ov.className='ov';
   ov.innerHTML=`<div class="sh"><h3>Menu</h3><div class="card" style="background:var(--c0)"><b>${esc(S.eq.nome)}</b><br><span class="muted">${esc(S.eq.id)} · pendentes de envio: ${S.fila.filter(o=>o.op!=='pos').length}</span></div>
-   <button class="big sec" style="width:100%;margin-bottom:10px" id="m_w">${S.wake?'💡 Deixar a tela apagar':'💡 Manter tela ligada (GPS contínuo)'}</button>
+   <button class="big sec" style="width:100%;margin-bottom:10px" id="m_c">💬 Falar com o COI</button>
    <button class="big sec" style="width:100%;margin-bottom:10px" id="m_s">⟳ Enviar agora</button>
    <button class="big sec" style="width:100%;margin-bottom:10px;color:var(--vp);border-color:var(--vp)" id="m_o">Sair da equipe</button><button class="big" style="width:100%" id="m_x">Fechar</button></div>`;
   document.body.appendChild(ov);ov.querySelector('#m_x').onclick=()=>ov.remove();ov.onclick=e=>{if(e.target===ov)ov.remove()};
-  ov.querySelector('#m_w').onclick=()=>{ov.remove();telaLigada()};ov.querySelector('#m_s').onclick=()=>{ov.remove();sincronizar();toast('Enviando…')};
+  ov.querySelector('#m_c').onclick=()=>{ov.remove();abrirChat()};ov.querySelector('#m_s').onclick=()=>{ov.remove();sincronizar();toast('Enviando…')};
   ov.querySelector('#m_o').onclick=()=>{if(S.fila.filter(o=>o.op!=='pos').length&&!confirm('Há apontamentos ainda não enviados. Sair mesmo assim? Eles serão perdidos.'))return;if(S.est.turno&&!confirm('O turno está aberto. Sair sem encerrar?'))return;ov.remove();sair()}}}
-function sair(exp){S.tok=null;S.est={turno:null,atividades:[],tarefas:[],config:{}};S.fila=[];salvar();telaLogin(exp?'Sessão expirada. Entre de novo.':'')}
+// ===== chat com o COI =====
+const MSG_TIPOS={servico_posterior:{ico:'🔁',nome:'Serviço posterior'},encaminhar:{ico:'➡️',nome:'Encaminhar p/ outra equipe'},apoio:{ico:'🆘',nome:'Preciso de apoio'},texto:{ico:'💬',nome:'Mensagem'},resposta:{ico:'✅',nome:'Resposta do COI'}};
+function naoLidas(){return (S.est.mensagens||[]).filter(m=>m.de==='coi'&&!m.lida_em).length}
+function avisarMsgs(){const n=naoLidas();if(n>(S.ultNaoLidas||0)){vib([100,60,100]);if(!$('#chatov'))toast('💬 Nova mensagem do COI',3000)}S.ultNaoLidas=n;botaoChat();if($('#chatov'))desenharChat()}
+function botaoChat(){if(!S.tok||!gpsOk()){$('#fab')&&$('#fab').remove();return}let b=$('#fab');
+  if(!b){b=document.createElement('button');b.id='fab';b.className='fab';b.setAttribute('aria-label','Falar com o COI');b.onclick=abrirChat;document.body.appendChild(b)}
+  const n=naoLidas();b.innerHTML='💬'+(n?`<span class="bd">${n}</span>`:'')}
+function osAtual(){const a=atual();const t=(S.est.tarefas||[]).find(x=>['em_execucao','em_deslocamento','aceita'].includes(x.status));return (a&&a.os)||(t&&t.os)||''}
+function abrirChat(){if($('#chatov'))return;vib(20);const ov=document.createElement('div');ov.className='ov';ov.id='chatov';
+  ov.innerHTML=`<div class="sh"><h3><span style="font-size:26px">💬</span>Linha direta com o COI</h3><div class="chat" id="ch_l"></div>
+   <div class="qa"><button data-q="servico_posterior"><b>🔁</b>Gerar serviço posterior</button><button data-q="encaminhar"><b>➡️</b>Encaminhar p/ outra equipe</button><button data-q="apoio"><b>🆘</b>Preciso de apoio</button><button data-q="loc"><b>📍</b>Enviar minha localização</button></div>
+   <div style="display:flex;gap:8px"><input id="ch_t" placeholder="Escreva para o COI…" style="flex:1;border:2px solid var(--c1);border-radius:12px;padding:12px;font-size:16px"><button class="big" style="flex:0 0 72px" id="ch_e">➤</button></div>
+   <button class="big sec" style="width:100%;margin-top:10px" id="ch_x">Fechar</button></div>`;
+  document.body.appendChild(ov);const fechar=()=>ov.remove();ov.querySelector('#ch_x').onclick=fechar;ov.onclick=e=>{if(e.target===ov)fechar()};
+  const env=()=>{const t=$('#ch_t').value.trim();if(!t)return;enviarMsg('texto',t,{});$('#ch_t').value=''};
+  $('#ch_e').onclick=env;$('#ch_t').onkeydown=e=>{if(e.key==='Enter')env()};
+  ov.querySelectorAll('[data-q]').forEach(b=>b.onclick=()=>pedido(b.dataset.q));
+  if(naoLidas())enfileirar({op:'msg_lida'});desenharChat()}
+function desenharChat(){const el=$('#ch_l');if(!el)return;const M=(S.est.mensagens||[]).slice(-60);
+  el.innerHTML=M.length?M.map(m=>{const t=MSG_TIPOS[m.tipo]||MSG_TIPOS.texto;const eu=m.de==='equipe';const d=m.dados||{};
+    const det=[d.motivo,d.equipe_destino?'Para: '+d.equipe_destino:'',m.os?'OS '+m.os:''].filter(Boolean).join(' · ');
+    const st=eu?(m.status==='enviando'?'⏳ aguardando sinal':m.status==='tratada'?'✔ tratado pelo COI':m.lida_em?'✔✔ lida':'✔ enviada'):esc(m.autor||'COI');
+    return `<div class="bl ${eu?'eu':'coi'}">${m.tipo!=='texto'?`<span class="tg">${t.ico} ${esc(t.nome)}</span><br>`:''}${det?`<b>${esc(det)}</b><br>`:''}${esc(m.texto||'')}${eu&&m.resposta?`<br><i>COI: ${esc(m.resposta)}</i>`:''}<small>${hm(m.em)} · ${st}</small></div>`}).join('')
+    :`<div class="vz" style="padding:14px">Nenhuma conversa ainda.<br>Use os botões abaixo para avisar o COI.</div>`;
+  el.scrollTop=el.scrollHeight}
+function enviarMsg(tipo,texto,dados,os){enfileirar(Object.assign({op:'msg',id:uid(),tipo,texto,dados,os:os||null,autor:S.eq&&S.eq.id},geo()));vib(30);
+  if(tipo!=='texto')toast('Enviado ao COI. Acompanhe a resposta aqui.',2600);desenharChat()}
+function pedido(q){const os=osAtual();const fC=$('#chatov');
+  if(q==='loc'){return enviarMsg('texto','📍 Minha localização atual'+(S.pos?` (precisão ${Math.round(S.pos.prec||0)} m)`:''),{})}
+  const cfg={servico_posterior:{t:'Gerar serviço posterior',i:'🔁',c:[{k:'os',rot:'OS de origem',tipo:'num',ph:'Nº da OS'},{k:'motivo',rot:'O que falta fazer',chips:['Reposição de pavimento','Recomposição de calçada','Limpeza com hidrojato','Troca de tampão/PV','Retorno para concluir','Material indisponível','Outro']},{k:'obs',rot:'Detalhe',ph:'Ex.: vala aberta 2 m, precisa de asfalto'}]},
+    encaminhar:{t:'Encaminhar para outra equipe',i:'➡️',c:[{k:'os',rot:'OS',tipo:'num',ph:'Nº da OS'},{k:'equipe_destino',rot:'Qual equipe',chips:['Hidrojato','Caminhão vácuo','Pavimentação','Rede / escavação','Eletromecânica','Ligação / ramal','Outra']},{k:'motivo',rot:'Motivo',chips:['Fora do nosso escopo','Equipamento inadequado','Precisa de escavação','Fim do turno','Outro']},{k:'obs',rot:'Detalhe',ph:'Opcional'}]},
+    apoio:{t:'Preciso de apoio',i:'🆘',c:[{k:'motivo',rot:'Tipo de apoio',chips:['Outra equipe no local','Material','Veículo com problema','Segurança / trânsito','Acesso negado pelo cliente','Outro']},{k:'obs',rot:'Detalhe',ph:'Opcional'}]}}[q];
+  if(fC)fC.remove();
+  folha(cfg.t,cfg.i,cfg.c,'Enviar ao COI',v=>{if(!v.motivo&&!v.equipe_destino)return toast('Escolha uma opção'),false;
+    const d={};['motivo','equipe_destino'].forEach(k=>{if(v[k])d[k]=v[k]});enviarMsg(q,v.obs||'',d,v.os||os);setTimeout(abrirChat,50)});
+  const i=document.querySelector('.ov input[data-k="os"]');if(i&&os)i.value=os}
+
+function sair(exp){S.tok=null;S.gpsEstado=undefined;S.ultNaoLidas=0;if(S.wake){try{S.wake.release()}catch(e){}S.wake=null}$('#fab')&&$('#fab').remove();S.est={turno:null,atividades:[],tarefas:[],config:{},mensagens:[]};S.fila=[];salvar();telaLogin(exp?'Sessão expirada. Entre de novo.':'')}
 
 // ===== ciclo =====
 setInterval(()=>{const c=$('#crono');const a=atual();if(c&&a)c.textContent=dur(Date.now()-new Date(a.inicio),true)},1000);
 setInterval(()=>{if(S.tok)sincronizar()},20000);
 setInterval(()=>{if(S.tok&&S.est.turno&&Date.now()-S.ultPosEnv>120000)enviarPos()},30000);
+setInterval(()=>{if(!S.tok)return;if(!S.pos||Date.now()-S.pos.em>60000)gpsTentar();gpsVerificar()},15000);
 setInterval(()=>{if(S.tok&&S.est.turno&&!document.querySelector('.ov'))desenharAtual()},60000);
 window.addEventListener('online',()=>{S.online=true;sincronizar()});window.addEventListener('offline',()=>{S.online=false;desenharTopo()});
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&S.tok){sincronizar();if(S.wake===null&&S.queriaWake)telaLigada()}});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&S.tok){sincronizar();gpsTentar();manterTela()}});
 if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
 iniciarGPS();render();if(S.tok)sincronizar();
 </script>
